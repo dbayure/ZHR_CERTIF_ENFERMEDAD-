@@ -1,0 +1,103 @@
+*&---------------------------------------------------------------------*
+*& Report ZHR_CONST_VISITA
+*&---------------------------------------------------------------------*
+*-----------------------------------------------------------------------
+* Programa   : Constancia de vicita medica
+* Descripcion: Formulario que lleva el medico al momento de hacer visitas
+*               al domicilio de la persona
+* Tran        :  Imprime los datos de Infotipo 00,01,02,06,07,08,28,41,50,105,185
+*               Subtipos del 1,2 y 10
+* Autor      : RDFB
+* Modificado : 09/08/2018
+*-----------------------------------------------------------------------
+REPORT ZHR_CONST_VISITA.
+TABLES: PA0002.
+
+DATA: wa_datos_persona TYPE ZHR_BASICO_PERSONA.
+
+SELECTION-SCREEN SKIP 3.
+SELECTION-SCREEN BEGIN OF BLOCK uno
+WITH FRAME TITLE TEXT-001.
+SELECT-OPTIONS CI FOR pa0002-pernr NO INTERVALS NO-EXTENSION OBLIGATORY MATCHCODE OBJECT prem.
+*SELECT-OPTIONS FECHA FOR pa0001-begda OBLIGATORY .
+SELECTION-SCREEN END OF BLOCK uno.
+
+START-OF-SELECTION.
+SELECT SINGLE * FROM pa0002 WHERE pernr IN ci AND begda <= sy-datum AND endda > sy-datum.
+
+CALL FUNCTION 'ZHR_BASICO_PERSONAL'
+  EXPORTING
+    PERSONA = pa0002-pernr
+  IMPORTING
+    BASICO_PERSONA = wa_datos_persona.
+
+PERFORM Imprimir_formulario.
+END-OF-SELECTION.
+
+FORM Imprimir_formulario.
+  DATA:
+        form              TYPE tdsfname  VALUE 'ZHRMED_CONST_VISITA_FORM',
+        conn              TYPE rfcdest   VALUE 'ADS',
+        connections       TYPE ty_connections,
+        fm_name           TYPE rs38l_fnam,
+        fp_docparams      TYPE sfpdocparams,
+        fp_outputparams   TYPE sfpoutputparams,
+        fp_result         TYPE fpformoutput,
+        error_string      TYPE string.
+
+  CALL FUNCTION 'FP_FUNCTION_MODULE_NAME'
+    EXPORTING
+      i_name     = form
+    IMPORTING
+      e_funcname = fm_name.
+
+* Set output parameters and open spool job
+  fp_outputparams-preview  = 'X'.    " do not launch print preview
+  fp_outputparams-nodialog = 'X'.      " suppress print dialog
+  fp_outputparams-DEST = 'PDF1'.
+  fp_outputparams-connection = conn.
+  CALL FUNCTION 'FP_JOB_OPEN'
+    CHANGING
+      ie_outputparams = fp_outputparams
+    EXCEPTIONS
+*      cancel          = 1
+      usage_error     = 2
+      system_error    = 3
+      internal_error  = 4
+      OTHERS          = 5.
+  IF sy-subrc <> 0.
+    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+            WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+  ENDIF.
+
+* Set form language and country (->form locale)
+  fp_docparams-langu    = 'S'.
+  fp_docparams-country  = 'UY'.
+  fp_docparams-fillable = space.
+* Now call the generated function module
+
+  CALL FUNCTION fm_name
+    EXPORTING
+      /1bcdwb/docparams = fp_docparams
+      FORM_DATOS_PERSONA = wa_datos_persona.
+
+*Estos son los datos que envio desde el programa ABAP
+*y que mi interfaz recibe, es necesario que
+*sean del mismo tipo sino habra un error en ejecución
+
+  CALL FUNCTION 'FP_JOB_CLOSE'
+    EXCEPTIONS
+      usage_error    = 1
+      system_error   = 2
+      internal_error = 3
+      OTHERS         = 4.
+
+  IF sy-subrc <> 0.
+
+    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+
+    WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+
+  ENDIF.
+
+ENDFORM.
