@@ -1,0 +1,233 @@
+FUNCTION ZHR_BASICO_PERSONAL.
+*----------------------------------------------------------------------
+*  Interfase local
+*  IMPORTING
+*     VALUE(PERSONA) TYPE  PA0002-PERNR
+*  EXPORTING
+*     VALUE(BASICO_PERSONA) TYPE  ZHR_BASICO_PERSONA
+*----------------------------------------------------------------------
+*-----------------------------------------------------------------------
+* Programa   : ZHR_BASICO_PERSONAL
+* Descripcion: Funcion que recibe un número de persona (pernr) y devuelve una estructura
+*              que contiene información básica de la misma.
+* Tran       : Devuelve datos de los Infotipos 00,01,02,03,06,07,08,28,41,50,105,185
+*               Subtipos del 1,2,3 y 10
+* Autor      : RDFB
+* Modificado : 08/08/2018
+*-----------------------------------------------------------------------
+
+
+DATA:
+      it_infty_0000       TYPE TABLE OF P0000  WITH HEADER LINE,
+      it_infty_0001       TYPE TABLE OF P0001  WITH HEADER LINE,
+      it_infty_0002       TYPE TABLE OF P0002  WITH HEADER LINE,
+      it_infty_0003       TYPE TABLE OF P0003  WITH HEADER LINE,
+      it_infty_0006       TYPE TABLE OF P0006  WITH HEADER LINE,
+      it_infty_0007       TYPE TABLE OF P0007  WITH HEADER LINE,
+      it_infty_0008       TYPE TABLE OF P0008  WITH HEADER LINE,
+      it_infty_0028       TYPE TABLE OF P0028  WITH HEADER LINE,
+      it_infty_0041       TYPE TABLE OF P0041  WITH HEADER LINE,
+      it_infty_0050       TYPE TABLE OF P0050  WITH HEADER LINE,
+      it_infty_0105       TYPE TABLE OF P0105  WITH HEADER LINE,
+      it_infty_0185       TYPE TABLE OF P0185  WITH HEADER LINE.
+
+DATA: lt_pa0002     TYPE TABLE OF P0002 WITH HEADER LINE,
+      wa_pa0000     TYPE P0000,
+      wa_pa0001     TYPE P0001,
+      wa_pa0002     TYPE P0002,
+      wa_pa0003     TYPE P0003,
+      wa_pa0006     TYPE P0006,
+      wa_pa0007     TYPE P0007,
+      wa_pa0008     TYPE P0008,
+      wa_pa0028     TYPE P0028,
+      wa_pa0041     TYPE P0041,
+      wa_pa0050     TYPE P0050,
+      wa_pa0105     TYPE P0105,
+      wa_pa0185     TYPE P0185.
+
+DATA:
+      ld_subrc   TYPE SY-SUBRC ,
+      ld_tclas   TYPE PSPAR-TCLAS ,
+      ld_pernr   TYPE PRELP-PERNR ,
+      ld_infty   TYPE PRELP-INFTY ,
+      ld_subty   TYPE PRELP-SUBTY ,
+      ld_begda   TYPE PRELP-BEGDA ,
+      ld_endda   TYPE PRELP-ENDDA.
+
+FIELD-SYMBOLS:
+    <fsym_itab>  TYPE STANDARD TABLE,     " Field symbol for internal table
+    <fsym_warea> TYPE ANY,                " Field symbol for work area
+    <fsym_field> TYPE ANY.                " Field symbol for field value
+
+DATA:
+    ref_rowtype TYPE REF TO cl_abap_structdescr,      " Rowtype ref to RTTS
+    ref_tabletype TYPE REF TO cl_abap_tabledescr.       " Internal table type ref to RTTS
+
+DATA:
+    ref_wa   TYPE REF TO data,            " Declaration of work area instance
+    ref_itab TYPE REF TO data.            " Declaration of internal table instance
+
+DATA:
+    w_infty TYPE i,
+    w_table TYPE dd02l-tabname.
+
+TYPES: BEGIN OF infotipo,
+  it TYPE char_4,
+END OF infotipo.
+
+DATA: lt_infotipo TYPE infotipo occurs 0,
+      wa_infotipo TYPE infotipo.
+
+SELECT * FROM pa0002 INTO CORRESPONDING FIELDS OF TABLE lt_pa0002 WHERE pernr = PERSONA AND begda <= sy-datum AND endda > sy-datum.
+
+ld_tclas = 'A'.
+LOOP AT lt_pa0002 INTO wa_pa0002.
+  ld_pernr = wa_pa0002-pernr.
+  ld_begda = wa_pa0002-begda.
+  ld_endda = wa_pa0002-endda.
+ENDLOOP.
+
+append '0000' to lt_infotipo.
+append '0001' to lt_infotipo.
+append '0002' to lt_infotipo.
+append '0003' to lt_infotipo.
+append '0006' to lt_infotipo.
+append '0007' to lt_infotipo.
+append '0008' to lt_infotipo.
+append '0028' to lt_infotipo.
+append '0041' to lt_infotipo.
+append '0050' to lt_infotipo.
+append '0105' to lt_infotipo.
+append '0185' to lt_infotipo.
+
+LOOP AT lt_infotipo into wa_infotipo.
+  ld_infty = wa_infotipo.
+  ld_subty = '*'.
+  CONCATENATE 'P' wa_infotipo INTO w_table.
+  ref_rowtype  ?= cl_abap_typedescr=>describe_by_name( w_table ).
+  ref_tabletype = cl_abap_tabledescr=>create( p_line_type = ref_rowtype ).
+
+  CREATE DATA ref_itab TYPE HANDLE ref_tabletype.
+  CREATE DATA ref_wa TYPE HANDLE ref_rowtype.
+
+  ASSIGN ref_itab->* TO <fsym_itab>.
+
+  CALL FUNCTION 'HR_READ_SUBTYPE'
+    EXPORTING
+      TCLAS                = ld_tclas
+      pernr                = ld_pernr
+      infty                = ld_infty
+      subty                = '*'
+      begda                = ld_begda
+      endda                = ld_endda
+     BYPASS_BUFFER        = 'X'
+    TABLES
+      infty_tab            =  <fsym_itab>
+   EXCEPTIONS
+     infty_not_found       = 1
+     OTHERS                = 2.
+
+  CASE sy-tabix.
+    WHEN 1.
+      ASSIGN COMPONENT 0 OF STRUCTURE <fsym_itab> TO <fsym_warea>.
+      MOVE-CORRESPONDING <fsym_warea> TO it_infty_0000[].
+      READ TABLE it_infty_0000[] INTO wa_pa0000 INDEX 1.
+    WHEN 2.
+      ASSIGN COMPONENT 0 OF STRUCTURE <fsym_itab> TO <fsym_warea>.
+      MOVE-CORRESPONDING <fsym_warea> TO it_infty_0001[].
+      READ TABLE it_infty_0001[] INTO wa_pa0001 INDEX 1.
+      BASICO_PERSONA-FECHA_ACT = wa_pa0001-BEGDA.
+      BASICO_PERSONA-FECHA_MODACT = wa_pa0001-BEGDA.
+      BASICO_PERSONA-FECHA_INACT = wa_pa0001-BEGDA.
+      BASICO_PERSONA-FECHA_MOD_INACT = wa_pa0001-BEGDA.
+      BASICO_PERSONA-FUNCIONARIO_AJENO = wa_pa0001-PERSG.
+      BASICO_PERSONA-UNIDAD = wa_pa0001-ORGEH.
+      BASICO_PERSONA-CENTRO_COSTO = wa_pa0001-KOSTL.
+      BASICO_PERSONA-RELACION_LAB = wa_pa0001-ANSVH.
+      BASICO_PERSONA-POSICION = wa_pa0001-PLANS.
+      BASICO_PERSONA-FUNCION = wa_pa0001-STELL.
+      BASICO_PERSONA-STATUS_OCUPACION = wa_pa0001-ZZADICIONAL.
+      BASICO_PERSONA-RU = wa_pa0001-SACHP.
+      BASICO_PERSONA-RP = wa_pa0001-SACHZ.
+      BASICO_PERSONA-POSICION_PRESUPUESTAL = wa_pa0001-PLANS.
+      BASICO_PERSONA-FUNCION_PRESUPUESTAL = wa_pa0001-STELL.
+      BASICO_PERSONA-UNIDAD_PRESUPUESTAL = wa_pa0001-ORGEH.
+      BASICO_PERSONA-DEPARTAMENTO = wa_pa0001-WERKS.
+      BASICO_PERSONA-LOCALIDAD = wa_pa0001-BTRTL.
+      BASICO_PERSONA-NIVEL_JERARQUICO = wa_pa0001-PERSK.
+    WHEN 3.
+      ASSIGN COMPONENT 0 OF STRUCTURE <fsym_itab> TO <fsym_warea>.
+      MOVE-CORRESPONDING <fsym_warea> TO it_infty_0002[].
+      READ TABLE it_infty_0002[] INTO wa_pa0002 INDEX 1.
+      BASICO_PERSONA-NOMBRE = wa_pa0002-VORNA.
+      BASICO_PERSONA-APELLIDO1 = wa_pa0002-NACHN.
+      BASICO_PERSONA-APELLIDO2 = wa_pa0002-NAME2.
+      BASICO_PERSONA-FECHA_NACIMIENTO = wa_pa0002-GBDAT.
+      BASICO_PERSONA-SEXO = wa_pa0002-GESCH.
+    WHEN 4.
+      ASSIGN COMPONENT 0  OF STRUCTURE <fsym_itab> TO <fsym_warea>.
+      MOVE-CORRESPONDING <fsym_warea> TO it_infty_0003[].
+      READ TABLE it_infty_0003[] INTO wa_pa0003 INDEX 1.
+    WHEN 5.
+      ASSIGN COMPONENT 0 OF STRUCTURE <fsym_itab> TO <fsym_warea>.
+      MOVE <fsym_warea> TO it_infty_0006[].
+      READ TABLE it_infty_0006[] INTO wa_pa0006 INDEX 1.
+      BASICO_PERSONA-DIR_PERSONAL_CALLE = wa_pa0006-STRAS.
+      BASICO_PERSONA-DIR_PERSONAL_NUM = wa_pa0006-HSNMR.
+      BASICO_PERSONA-DIR_PERSONAL_APTO = wa_pa0006-POSTA.
+      BASICO_PERSONA-DIR_PERSONAL_TEL = wa_pa0006-TELNR.
+      BASICO_PERSONA-DIR_PERSONAL_CEL = wa_pa0006-NUM01.
+      READ TABLE it_infty_0006[] INTO wa_pa0006 INDEX 2.
+      BASICO_PERSONA-DIR_LABORAL_EDIFICIO = wa_pa0006-LOCAT.
+      BASICO_PERSONA-DIR_LABORAL_CALLE = wa_pa0006-STRAS.
+      BASICO_PERSONA-DIR_LABORAL_NUM = wa_pa0006-HSNMR.
+      BASICO_PERSONA-DIR_LABORAL_APTO = wa_pa0006-POSTA.
+      BASICO_PERSONA-DIR_LABORAL_TEL = wa_pa0006-TELNR.
+      BASICO_PERSONA-DIR_LABORAL_CEL = wa_pa0006-NUM01.
+    WHEN 6.
+      ASSIGN COMPONENT 0 OF STRUCTURE <fsym_itab> TO <fsym_warea>.
+      MOVE-CORRESPONDING <fsym_warea> TO it_infty_0007[].
+      READ TABLE it_infty_0007[] INTO wa_pa0007 INDEX 1.
+      BASICO_PERSONA-JORNADA_SEMANAL = wa_pa0007-WOSTD.
+      BASICO_PERSONA-DIAS_LAB_SEMANALES = wa_pa0007-WKWDY.
+      BASICO_PERSONA-REGLA_PLAN_HORARIO = wa_pa0007-SCHKZ.
+    WHEN 7.
+      ASSIGN COMPONENT 0 OF STRUCTURE <fsym_itab> TO <fsym_warea>.
+      MOVE-CORRESPONDING <fsym_warea> TO it_infty_0008[].
+      READ TABLE it_infty_0008[] INTO wa_pa0008 INDEX 1.
+      BASICO_PERSONA-CLASE = wa_pa0008-TRFGR.
+      BASICO_PERSONA-PROFESION = wa_pa0008-PREAS.
+    WHEN 8.
+      ASSIGN COMPONENT 0 OF STRUCTURE <fsym_itab> TO <fsym_warea>.
+      MOVE-CORRESPONDING <fsym_warea> TO it_infty_0028[].
+      READ TABLE it_infty_0028[] INTO wa_pa0028 INDEX 1.
+    WHEN 9.
+      ASSIGN COMPONENT 0 OF STRUCTURE <fsym_itab> TO <fsym_warea>.
+      MOVE-CORRESPONDING <fsym_warea> TO it_infty_0041[].
+      READ TABLE it_infty_0041[] INTO wa_pa0041 INDEX 1.
+      BASICO_PERSONA-FECHA_ALTA_ANTEL = wa_pa0041-DAT01.
+    WHEN 10.
+      ASSIGN COMPONENT 0 OF STRUCTURE <fsym_itab> TO <fsym_warea>.
+      MOVE-CORRESPONDING <fsym_warea> TO it_infty_0050[].
+      READ TABLE it_infty_0050[] INTO wa_pa0050 INDEX 1.
+      BASICO_PERSONA-MODO_REGISTRO = wa_pa0050-ZUSKZ.
+    WHEN 11.
+      ASSIGN COMPONENT 0 OF STRUCTURE <fsym_itab> TO <fsym_warea>.
+      MOVE-CORRESPONDING <fsym_warea> TO it_infty_0105[].
+      READ TABLE it_infty_0105[] INTO wa_pa0105 INDEX 1.
+      BASICO_PERSONA-USUARIO =  wa_pa0105-USRID.
+      READ TABLE it_infty_0105[] INTO wa_pa0105 INDEX 2.
+      BASICO_PERSONA-MAIL = wa_pa0105-USRID_LONG.
+    WHEN 12.
+      ASSIGN COMPONENT 0 OF STRUCTURE <fsym_itab> TO <fsym_warea>.
+      MOVE-CORRESPONDING <fsym_warea> TO it_infty_0185[].
+      READ TABLE it_infty_0185[] INTO wa_pa0185 INDEX 1.
+      BASICO_PERSONA-CEDULA =  wa_pa0185-ICNUM.
+      READ TABLE it_infty_0185[] INTO wa_pa0185 INDEX 2.
+      BASICO_PERSONA-CC =  wa_pa0185-ICNUM.
+      READ TABLE it_infty_0185[] INTO wa_pa0185 INDEX 3.
+      BASICO_PERSONA-VTO_CARNE_SALUD = wa_pa0185-EXPID.
+  ENDCASE.
+ENDLOOP.
+
+ENDFUNCTION.
